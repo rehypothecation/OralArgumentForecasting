@@ -8,14 +8,16 @@ from pprint import pprint
 import csv
 
 
-def get_df(justice:str, export_csv=False):
+def get_df(justice: str, limit=0, export_csv=False):
     class Person:
-        def __init__(self,
-                    name,
-                    is_justice=False,
-                    decision_type=None,
-                    representing=None,
-                    sided_with=None) -> None:
+        def __init__(
+            self,
+            name,
+            is_justice=False,
+            decision_type=None,
+            representing=None,
+            sided_with=None,
+        ) -> None:
             super().__init__()
             self.name = name
             self.is_justice = is_justice
@@ -23,21 +25,14 @@ def get_df(justice:str, export_csv=False):
             self.decision_type = decision_type
             self.sided_with = sided_with
 
-
     class Utterance:
         def __init__(self, speaker: Person, content: str, addressing=None):
             self.speaker = speaker
             self.content = content
             self.addressing = addressing
 
-
     class Case:
-        def __init__(self,
-                    case_name,
-                    winner,
-                    party1,
-                    party2,
-                    utterances: list = []):
+        def __init__(self, case_name, winner, party1, party2, utterances: list = []):
             self.casename = case_name
             self.utterances = utterances
             self.winner = winner
@@ -52,132 +47,161 @@ def get_df(justice:str, export_csv=False):
             self.utterances.append(utterance)
 
         def get_words_and_vote_by_justice(self, justice: str):
-            res = [{
-                'speaker': x.speaker.name,
-                'content': x.content,
-                'vote': x.speaker.decision_type
-            } for x in cases[0].utterances
-                if (x.speaker != None and justice in x.speaker.name)]
+            res = [
+                {
+                    "speaker": x.speaker.name,
+                    "content": x.content,
+                    "vote": x.speaker.decision_type,
+                }
+                for x in cases[0].utterances
+                if (x.speaker != None and justice in x.speaker.name)
+            ]
 
             return res
 
-
     def get_case_from_decision_data(case_data):
-        with open(case_data['filename'], 'r', encoding='utf-8') as file:
+        with open(case_data["filename"], "r", encoding="utf-8") as file:
             try:
                 vote_data = json.loads(file.read())
-                first_party = vote_data['first_party']
-                second_party = vote_data['second_party']
-                winning_party = 'petitioner' if vote_data['decisions'][0]['winning_party'][0:5] in first_party else 'respondent'
+                first_party = vote_data["first_party"]
+                second_party = vote_data["second_party"]
+                winning_party = (
+                    "petitioner"
+                    if vote_data["decisions"][0]["winning_party"][0:5] in first_party
+                    else "respondent"
+                )
                 justices = []
-                for justice in vote_data['decisions'][0]['votes']:
+                for justice in vote_data["decisions"][0]["votes"]:
                     sided_with = None
-                    if justice['vote'] == 'majority' and winning_party == 'petitioner':
-                        sided_with = 'petitioner'
-                    elif justice['vote'] == 'concurrance' and winning_party == 'petitioner':
-                        sided_with = 'petitioner'
-                    elif justice['vote'] == 'minority' and winning_party == 'petitioner':
-                        sided_with = 'respondent'
-                    elif justice['vote'] == 'majority' and winning_party == 'respondent':
-                        sided_with = 'respondent'
-                    elif justice['vote'] == 'concurrance' and winning_party == 'respondent':
-                        sided_with = 'respondent'
-                    elif justice['vote'] == 'minority' and winning_party == 'respondent':
-                        sided_with = 'petitioner'
-                    elif justice['vote'] == 'minority' and winning_party == 'respondent':
-                        sided_with = 'None'
+                    if justice["vote"] == "majority" and winning_party == "petitioner":
+                        sided_with = "petitioner"
+                    elif (
+                        justice["vote"] == "concurrance"
+                        and winning_party == "petitioner"
+                    ):
+                        sided_with = "petitioner"
+                    elif (
+                        justice["vote"] == "minority" and winning_party == "petitioner"
+                    ):
+                        sided_with = "respondent"
+                    elif (
+                        justice["vote"] == "majority" and winning_party == "respondent"
+                    ):
+                        sided_with = "respondent"
+                    elif (
+                        justice["vote"] == "concurrance"
+                        and winning_party == "respondent"
+                    ):
+                        sided_with = "respondent"
+                    elif (
+                        justice["vote"] == "minority" and winning_party == "respondent"
+                    ):
+                        sided_with = "petitioner"
+                    elif (
+                        justice["vote"] == "minority" and winning_party == "respondent"
+                    ):
+                        sided_with = "None"
                     justices.append(
-                        Person(name=justice['member']['name'],
+                        Person(
+                            name=justice["member"]["name"],
                             is_justice=True,
-                            decision_type=justice['vote'],
-                            sided_with=sided_with))
-                case = Case(case_name=vote_data['name'],
-                            winner=winning_party,
-                            party1=first_party,
-                            party2=second_party)
+                            decision_type=justice["vote"],
+                            sided_with=sided_with,
+                        )
+                    )
+                case = Case(
+                    case_name=vote_data["name"],
+                    winner=winning_party,
+                    party1=first_party,
+                    party2=second_party,
+                )
                 case.add_participants(justices)
                 n = 0
-                for advocate in vote_data['advocates']:
+                for advocate in vote_data["advocates"]:
 
-                    case.add_participants([
-                        Person(name=advocate['advocate']['name'],
-                            is_justice=False,
-                            decision_type=None,
-                            representing="petitioner" if n == 0 else 'respondent')
-                    ])
+                    case.add_participants(
+                        [
+                            Person(
+                                name=advocate["advocate"]["name"],
+                                is_justice=False,
+                                decision_type=None,
+                                representing="petitioner" if n == 0 else "respondent",
+                            )
+                        ]
+                    )
                     n += 1
+                print(f"Using case {case_data['filename']}.")
                 return case
-            except TypeError:
+            except TypeError as err:
+                print(f"Missing case {case_data['filename']}.")
                 return None
-
 
     def filetree(top):
         for dirpath, _, fnames in os.walk(top):
             for fname in fnames:
-                json_ = '(-t\d\d)*\.json'
-                transcript_ = '-t\d\d\.json'
+                json_ = "(-t\d\d)*\.json"
+                transcript_ = "-t\d\d\.json"
                 yield {
-                    'filename':
-                    os.path.join(dirpath, fname),
-                    'case_id':
-                    re.sub(json_, '', fname),
-                    'type':
-                    'transcript'
-                    if re.search(transcript_, fname) else 'decision_data'
+                    "filename": os.path.join(dirpath, fname),
+                    "case_id": re.sub(json_, "", fname),
+                    "type": "transcript"
+                    if re.search(transcript_, fname)
+                    else "vote_summary_file",
                 }
 
-
-    case_data = list(filetree('./data'))[: -6]
-
+    case_data = list(filetree("./data"))
     decision_data_transcript_pairs = []
-    for case_datum in case_data:
-        if case_datum['type'] == 'transcript':
-            case_id_to_find = case_datum['case_id']
-            decision_datum = [
-                res for res in case_data if res['type'] == 'decision_data'
-                and res['case_id'] == case_id_to_find
-            ][0]
-            decision_data_transcript_pairs.append((decision_datum, case_datum))
+    for d in case_data:
+        if d["type"] == "transcript":
+            transcript_file = d
+            case_id_to_find = transcript_file["case_id"]
+            vote_summary_file = next(
+                file
+                for file in case_data
+                if file["type"] == "vote_summary_file"
+                and file["case_id"] == case_id_to_find
+            )
+
+            decision_data_transcript_pairs.append([vote_summary_file, transcript_file])
 
     cases = []
     for pair in decision_data_transcript_pairs:
-        transcript_file = [file for file in pair
-                        if file['type'] == 'transcript'][0]
-        decision_data_file = [
-            file for file in pair if file['type'] == 'decision_data'
-        ][0]
-        case_file = get_case_from_decision_data(decision_data_file)
-        if case_file is not None:
-            with open(transcript_file['filename'], 'r', encoding='utf-8') as transcript:
-                try:
-                    transcript = json.load(transcript)
-                    for section in transcript['transcript']['sections']:
-                        previous_speaker = None
-                        current_speaker = None
-                        for turn in section['turns']:
-                            for participant in case_file.participants:
+        vote_summary_file = pair[0]
+        current_case = get_case_from_decision_data(vote_summary_file)
+        transcript_file = pair[1]
+        with open(transcript_file["filename"], "r", encoding="utf-8") as file:
+            transcript_as_json = json.load(file)
+            try:
+                for section in transcript_as_json["transcript"]["sections"]:
+                    previous_speaker = None
+                    current_speaker = None
+                    for turn in section["turns"]:
+                        try:
+                            for participant in current_case.participants:
                                 try:
-                                    if participant.name == turn['speaker']['name']:
+                                    if participant.name == turn["speaker"]["name"]:
                                         previous_speaker = current_speaker
                                         current_speaker = participant
                                 except TypeError:
                                     pass
-                            for text in turn['text_blocks']:
-                                case_file.add_utterance(
-                                    Utterance(current_speaker, text['text'], addressing=previous_speaker))
-
-                    cases.append(case_file)
-                except TypeError:
-                    """
-                    Some transcripts are damaged.
-                    """
-                    pass
+                            for text in turn["text_blocks"]:
+                                current_case.add_utterance(
+                                    Utterance(
+                                        current_speaker,
+                                        text["text"],
+                                        addressing=previous_speaker,
+                                    )
+                                )
+                        except AttributeError as err:
+                            print(f"not using {vote_summary_file}")
+                cases.append(current_case)
+            except TypeError:
+                break
 
     #%%
 
-
     res = []
-    for case in cases:
+    for case in [c for c in cases if c is not None]:
         for utterance in case.utterances:
             if utterance.speaker != None and justice in utterance.speaker.name:
                 res.append(utterance)
@@ -200,14 +224,30 @@ def get_df(justice:str, export_csv=False):
     import pandas as pd
 
     if export_csv:
-        pd.DataFrame([line.content for line in lines_to_losing_party], columns=["text"]).to_csv(f"{justice}_loser.csv")
-        pd.DataFrame([line.content for line in lines_to_winning_party], columns=["text"]).to_csv(f"{justice}_winner.csv")
+        pd.DataFrame(
+            [line.content for line in lines_to_losing_party], columns=["text"]
+        ).to_csv(f"{justice}_loser.csv")
+        pd.DataFrame(
+            [line.content for line in lines_to_winning_party], columns=["text"]
+        ).to_csv(f"{justice}_winner.csv")
 
-    df = pd.DataFrame([[line.content for line in lines_to_winning_party], ['1']], columns= ['text', 'winning'])
-    df.append()
+    df = pd.DataFrame(
+        {
+            "text": [line.content for line in lines_to_winning_party],
+            "addressing_winning_party": 1,
+        }
+    )
+    df.append(
+        {
+            "text": [line.content for line in lines_to_losing_party],
+            "addressing_winning_party": 0,
+        },
+        ignore_index=True,
+    )
+    return df
 
-    return pd.DataFrame([line.content for line in lines_to_winning_party], columns=["text",  "winning"])
+
 # %%
+get_df("O'Connor")
+
 # %%
-get_df("Alito")
- 
