@@ -8,9 +8,9 @@ from pprint import pprint
 import csv
 
 
-export_csv = False
+export_csv = True
 justice = "O'Connor"
-limit = 0
+limit = 100
 class Person:
     def __init__(
         self,
@@ -145,7 +145,6 @@ def get_case_from_decision_data(case_data):
                 ]
             )
             n += 1
-        print(f"Using case {case_data['filename']}.")
         return case
 
 
@@ -237,48 +236,77 @@ for line in res:
 
 import pandas as pd
 
-if export_csv:
-    pd.DataFrame(
-        [line.content for line in lines_to_losing_party], columns=["text"]
-    ).to_csv(f"{justice}_loser.csv")
-    pd.DataFrame(
-        [line.content for line in lines_to_winning_party], columns=["text"]
-    ).to_csv(f"{justice}_winner.csv")
+
+
+print("step1 done")
 
 df = pd.DataFrame(
     {
         "text": [line.content for line in lines_to_winning_party],
-        "addressing_winning_party": 1,
+        "addressing_winning_party": 0,
     }
 )
 df2 = pd.DataFrame(
     {
         "text": [line.content for line in lines_to_losing_party],
-        "addressing_winning_party": 0,
+        "addressing_winning_party": 1,
     }
 )
 
 df = pd.concat([df, df2])
 
-df
-# %%
-from simpletransformers.classification import ClassificationModel
 
-# Train and Evaluation data needs to be in a Pandas Dataframe of two columns. The first column is the text with type str, and the second column is the label with type int.
+from simpletransformers.classification import ClassificationModel, ClassificationArgs
+import pandas as pd
+import logging
 
-df_bak = df
 
-df=df.sample(frac=0.01,random_state=200)
+logging.basicConfig(level=logging.INFO)
+transformers_logger = logging.getLogger("transformers")
+transformers_logger.setLevel(logging.WARNING)
+
+# df_bak = df
+
+df=df.sample(frac=0.051,random_state=200)
 train_df=df.sample(frac=0.8,random_state=200)
 eval_df=df.drop(train_df.index)
+train_df.columns = ["text", "labels"]
+
+eval_df.columns = ["text", "labels"]
+
+if export_csv:
+
+    train_df.to_csv("train.tsv", sep="\t")
+    eval_df.to_csv("test.tsv", sep="\t")
+
+    # pd.DataFrame(
+    #     [line.content for line in lines_to_losing_party], columns=["text"]
+    # ).to_csv(f"{justice}_loser.csv")
+
+    # pd.DataFrame(
+    #     [line.content for line in lines_to_winning_party], columns=["text"]
+    # ).to_csv(f"{justice}_winner.csv")
+
+#%%
+
+
+# Optional model configuration
+model_args = ClassificationArgs()
+model_args.num_train_epochs=1
+model_args.labels_list = ["true", "false"]
 
 # Create a ClassificationModel
-model = ClassificationModel("roberta", "roberta-base")
+model = ClassificationModel(
+    'roberta', 'roberta-large'
+)
 
 # Train the model
-model.train_model(train_df)
+model.train_model(df)
 
 # Evaluate the model
 result, model_outputs, wrong_predictions = model.eval_model(eval_df)
 
-# %%
+#%%
+# Make predictions with the model
+predictions, raw_outputs = model.predict(["The secretary is not required."])
+
